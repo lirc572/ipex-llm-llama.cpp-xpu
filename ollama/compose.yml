@@ -1,0 +1,28 @@
+services:
+  ollama-server:
+    image: ghcr.io/lirc572/ipex-llm-serve-ollama:latest
+    restart: unless-stopped
+    ports:
+      - 8081:11434
+    volumes:
+      - ./ollama:/root/.ollama
+    environment:
+      - DEVICE=iGPU
+      - OLLAMA_NUM_GPU=999
+      - ZES_ENABLE_SYSMAN=1
+    devices:
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        limits:
+          memory: 48G
+    shm_size: 16g
+  webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    environment:
+      - OLLAMA_BASE_URL=http://ollama-server:11434
+    ports:
+      - 8080:8080
+    volumes:
+      - ./webui:/app/backend/data

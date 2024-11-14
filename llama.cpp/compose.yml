@@ -1,0 +1,28 @@
+services:
+  llama-cpp-server:
+    image: ghcr.io/lirc572/ipex-llm-serve-llama.cpp:latest
+    restart: unless-stopped
+    ports:
+      - 8081:8080
+    volumes:
+      - ./models:/models
+    environment:
+      - DEVICE=iGPU
+    devices:
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        limits:
+          memory: 48G
+    shm_size: 16g
+    command: /llm/llama-cpp/llama-server -m /models/smollm2-360m-instruct-q8_0.gguf --mlock --host 0.0.0.0 --port 8080 --api-key sk-hhh
+  webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    environment:
+      - OPENAI_API_BASE_URL=http://llama-cpp-server:8080/v1
+      - OPENAI_API_KEY=sk-hhh
+    ports:
+      - 8080:8080
+    volumes:
+      - ./webui:/app/backend/data
