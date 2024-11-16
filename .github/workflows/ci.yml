@@ -1,0 +1,76 @@
+name: Build and Push Container Images
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs every day
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+jobs:
+  check-base-image-tags:
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.check-tags.outputs.tags }}
+      digests: ${{ steps.check-tags.outputs.digests }}
+    steps:
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Check for new tags of the base image
+        id: check-tags
+        run: |
+          BASE_IMAGE="intelanalytics/ipex-llm-inference-cpp-xpu"
+          RESPONSE=$(curl -s "https://hub.docker.com/v2/repositories/${BASE_IMAGE}/tags?page_size=10")
+          TAGS=$(echo "$RESPONSE" | jq -r '.results[].name' | tr '\n' ' ')
+          DIGESTS=$(echo "$RESPONSE" | jq -r '.results[].digest' | tr '\n' ' ')
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "digests=$DIGESTS" >> "$GITHUB_OUTPUT"
+
+  filter-base-image-tags:
+    needs: check-base-image-tags
+    runs-on: ubuntu-latest
+    outputs:
+      unbuilt_tags: ${{ steps.filter-tags.outputs.unbuilt_tags }}
+    steps:
+      - name: Filter out already built tags
+        id: filter-tags
+        run: |
+          TAGS="${{ needs.check-base-image-tags.outputs.tags }}"
+          DIGESTS="${{ needs.check-base-image-tags.outputs.digests }}"
+          UNBUILT_TAGS=""
+          IFS=' ' read -r -a TAG_ARRAY <<< "$TAGS"
+          IFS=' ' read -r -a DIGEST_ARRAY <<< "$DIGESTS"
+          for i in "${!TAG_ARRAY[@]}"; do
+            TAG=${TAG_ARRAY[$i]}
+            DIGEST=${DIGEST_ARRAY[$i]}
+            if ! curl -s -f -lSL "https://ghcr.io/v2/lirc572/ipex-llm-serve-llama.cpp/manifests/$TAG" | grep -q "$DIGEST"; then
+              UNBUILT_TAGS+="$TAG "
+            fi
+          done
+          echo "unbuilt_tags=$UNBUILT_TAGS" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    needs: filter-base-image-tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images
+        run: |
+          UNBUILT_TAGS="${{ needs.filter-base-image-tags.outputs.unbuilt_tags }}"
+          for TAG in $UNBUILT_TAGS; do
+            docker build -t ghcr.io/lirc572/ipex-llm-serve-llama.cpp:$TAG llama.cpp --build-arg BASE_IMAGE_TAG=$TAG
+            docker push ghcr.io/lirc572/ipex-llm-serve-llama.cpp:$TAG
+            docker build -t ghcr.io/lirc572/ipex-llm-serve-ollama:$TAG ollama --build-arg BASE_IMAGE_TAG=$TAG
+            docker push ghcr.io/lirc572/ipex-llm-serve-ollama:$TAG
+          done

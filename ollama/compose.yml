@@ -7,6 +7,7 @@ services:
     volumes:
       - ./ollama:/root/.ollama
     environment:
+      - OLLAMA_HOST=0.0.0.0
       - DEVICE=iGPU
       - OLLAMA_NUM_GPU=999
       - ZES_ENABLE_SYSMAN=1

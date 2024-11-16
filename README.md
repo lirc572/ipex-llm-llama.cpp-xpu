@@ -1,5 +1,8 @@
 # ipex-llm-serve
 
+[![CI](https://github.com/lirc572/ipex-llm-serve/actions/workflows/ci.yml/badge.svg)](https://github.com/lirc572/ipex-llm-serve/actions/workflows/ci.yml)
+
+
 This repo provides container images for **llama.cpp server** and **ollama server** for Intel CPU, GPU and NPU (based on [intelanalytics/ipex-llm-inference-cpp-xpu](https://hub.docker.com/r/intelanalytics/ipex-llm-inference-cpp-xpu)) that are ready-to-run.
 
 | Name | Container Image | README |
